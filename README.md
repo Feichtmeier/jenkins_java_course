@@ -107,7 +107,7 @@
     pipeline {
     agent 'any'
     tools {
-        maven 'MAVEN_HOME'
+        maven 'maven'
         dockerTool 'docker'
     }
     stages {
@@ -128,11 +128,11 @@
                 sh(script: 'mvn test')
             }
         }
-        //stage('Package') {
-        //    steps {
-        //        sh(script: 'mvn install -Pproduction')
-        //    }
-        //}
+        stage('Package') {
+           steps {
+                sh(script: 'mvn install -Pproduction')
+           }
+        }
         stage('Initialize'){
             steps {
                 script {
@@ -154,6 +154,6 @@
             junit(testResults: 'target/surefire-reports/*.xml', allowEmptyResults : true)
         }
     }
-    }
+}
     
     ```
