@@ -144,7 +144,14 @@
          stage('Build Image'){
             steps {
                 script {
-                    docker.build("my-todo")
+                    sh(script: 'docker build -t vaadin-docker .')
+                }
+            }
+        }
+        stage('Run Image') {
+            steps {
+                script {
+                    sh(script: 'docker run -d -p 8090:8080 vaadin-docker')
                 }
             }
         }
