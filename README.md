@@ -18,6 +18,18 @@
         jenkins/jenkins:jdk17
     ```
 
+    wip
+    ```
+    docker container run -d \
+        -u root \
+        -p 8082:8080 \
+        -v jenkinsvol1:/var/jenkins_home \
+        -v $(which docker):/usr/bin/docker \
+        -v /var/run/docker.sock:/var/run/docker.sock \
+        --name jenkins-local3 \
+        jenkins/jenkins:jdk17
+    ```
+
     ```
     docker container exec \                
         jenkins-local \
@@ -89,4 +101,59 @@
         }
     }
     }
+    ```
+
+    ```
+    pipeline {
+    agent 'any'
+    tools {
+        maven 'MAVEN_HOME'
+        dockerTool 'docker'
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    checkout([$class: 'GitSCM', branches: [[name: '*/main']], userRemoteConfigs: [[url: 'https://github.com/Feichtmeier/my-todo.git']]])
+                }
+            }
+        }
+        stage('Clean') {
+            steps {
+                sh(script: 'mvn -e clean')
+            }
+        }
+        stage('Test') {
+            steps {
+                sh(script: 'mvn test')
+            }
+        }
+        //stage('Package') {
+        //    steps {
+        //        sh(script: 'mvn install -Pproduction')
+        //    }
+        //}
+        stage('Initialize'){
+            steps {
+                script {
+                    def dockerHome = tool 'docker'
+                    env.PATH = "${dockerHome}/bin:${env.PATH}"
+                }
+            }
+        }
+         stage('Build Image'){
+            steps {
+                script {
+                    docker.build("my-todo")
+                }
+            }
+        }
+    }
+    post {
+        always {
+            junit(testResults: 'target/surefire-reports/*.xml', allowEmptyResults : true)
+        }
+    }
+    }
+    
     ```
