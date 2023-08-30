@@ -1,42 +1,15 @@
 - install vscode
 - install vscode docker extensions
 - install docker
-- install jenkins
-
-    ```
-    docker image pull jenkins/jenkins:jdk17
-    ```
-
-    ```
-    docker volume create jenkinsvol1  
-    ```
-
-    ```
-    docker container run -d -p 8082:8080 \ 
-        -v jenkinsvol1:/var/jenkins_home \
-        --name jenkins-local \
-        jenkins/jenkins:jdk17
-    ```
-
-    wip
-    ```
-    docker container run -d \
-        -u root \
-        -p 8082:8080 \
-        -v jenkinsvol1:/var/jenkins_home \
-        -v $(which docker):/usr/bin/docker \
-        -v /var/run/docker.sock:/var/run/docker.sock \
-        --name jenkins-local3 \
-        jenkins/jenkins:jdk17
-    ```
+- install jenkins: [Instructions](https://www.jenkins.io/doc/book/installing/docker/)
 
     ```
     docker container exec \                
-        jenkins-local \
+        jenkins-blueocean \
         sh -c "cat /var/jenkins_home/secrets/initialAdminPassword"
     ```
   - copy to clipboard
-  - right click on jenkins/jenkins:jdk17 jenkins-local -> Open in Browser
+  - right click on jenkins/jenkins:jdk17 jenkins-blueocean -> Open in Browser
   - create new admin with copied password, repeat password
 - Install and configure maven to work with java 17
   - Jenkins verwalten/configure Jenkins
@@ -56,111 +29,72 @@
   - Automatisch installieren
   - Version 3.8.1
   - Save
+- create docker hub account and safe credentials in jenkins (global), id: dockerhub
 - create pipeline
   - Dashboard
   - Element anlegen
   - Pipeline
+
     ```groovy
     pipeline {
-    agent 'any'
-    tools {
-            maven 'MAVEN_HOME'
+        environment {
+            registry = 'feichtmeier/hub'
+            registryCredential = 'dockerhub'
         }
-    stages {
-        stage('Checkout') {
-        steps {
-            script {
-                checkout([$class: 'GitSCM', branches: [[name: '*/main']], userRemoteConfigs: [[url: 'https://github.com/Feichtmeier/calctests.git']]])
-            }
+        agent 'any'
+        tools {
+            maven 'maven'
+            dockerTool 'docker'
         }
-        }
-        stage('Clean') {
-        steps {
-            sh(script: 'mvn -e clean')
-        }
-        }
-        stage('Test') {
-        steps {
-            sh(script: 'mvn test')
-        }
-        }
-        stage('Install') {
-        steps {
-            sh(script: 'mvn install')
-        }
-        }
-        stage('Package') {
-        steps {
-            sh(script: 'mvn compile assembly:single')
-        }
-        }
-    }
-    post {
-        always {
-        junit(testResults: 'target/surefire-reports/*.xml', allowEmptyResults : true)
-        }
-    }
-    }
-    ```
-
-    ```
-    pipeline {
-    agent 'any'
-    tools {
-        maven 'maven'
-        dockerTool 'docker'
-    }
-    stages {
-        stage('Checkout') {
-            steps {
-                script {
-                    checkout([$class: 'GitSCM', branches: [[name: '*/main']], userRemoteConfigs: [[url: 'https://github.com/Feichtmeier/my-todo.git']]])
+        stages {
+            stage('Checkout') {
+                steps {
+                    script {
+                        checkout([$class: 'GitSCM', branches: [[name: '*/main']], userRemoteConfigs: [[url: 'https://github.com/Feichtmeier/my-todo.git']]])
+                    }
                 }
             }
-        }
-        stage('Clean') {
-            steps {
-                sh(script: 'mvn -e clean')
-            }
-        }
-        stage('Test') {
-            steps {
-                sh(script: 'mvn test')
-            }
-        }
-        stage('Package') {
-           steps {
-                sh(script: 'mvn install -Pproduction')
-           }
-        }
-        stage('Initialize'){
-            steps {
-                script {
-                    def dockerHome = tool 'docker'
-                    env.PATH = "${dockerHome}/bin:${env.PATH}"
+            stage('Clean') {
+                steps {
+                    sh(script: 'mvn clean')
                 }
             }
-        }
-         stage('Build Image'){
-            steps {
-                script {
-                    sh(script: 'docker build -t vaadin-docker .')
+            stage('Test') {
+                steps {
+                    sh(script: 'mvn test')
                 }
             }
-        }
-        stage('Run Image') {
+            stage('Package') {
             steps {
-                script {
-                    sh(script: 'docker run -d -p 8090:8080 vaadin-docker')
+                    sh(script: 'mvn install -Pproduction')
+            }
+            }
+            stage('Build') {
+                steps {
+                    script {
+                    dockerImage = docker.build registry + ":$BUILD_NUMBER"
+                    }
                 }
+            }
+            stage('Deploy') {
+                steps {
+                    script {
+                        docker.withRegistry( '', registryCredential) {
+                            dockerImage.push()
+                        }
+                    }
+                }
+            }
+            stage('Remove Unused docker image') {
+            steps{
+                sh "docker rmi $registry:$BUILD_NUMBER"
+            }
+            }
+        }
+        post {
+            always {
+                junit(testResults: 'target/surefire-reports/*.xml', allowEmptyResults : true)
             }
         }
     }
-    post {
-        always {
-            junit(testResults: 'target/surefire-reports/*.xml', allowEmptyResults : true)
-        }
-    }
-}
-    
     ```
